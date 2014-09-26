@@ -5,6 +5,7 @@ from itertools import chain
 from collections import Counter
 import math
 
+
 def main():
 
 	(data_file, sup_file, out_file) = read_args(sys.argv[1:])
@@ -40,6 +41,7 @@ def main():
 	patterns = ms_ps(sequences, mis, sdc)
 
 	write_result(patterns, out_file)
+
 
 def read_args(args):
 	"""Read arguments from commend line."""
@@ -80,6 +82,7 @@ def read_args(args):
 
 	return data_file, sup_file, out_file
 
+
 def _exit(message):
 	if message == 'help':
 		message = 'usage: -d data_file [-s support_file [-o output_file]]\n'
@@ -91,8 +94,9 @@ def _exit(message):
 	print message
 	sys.exit(1)
 
+
 def ms_ps(sequences, mis, sdc):
-	if sequences == None or len(sequences) == 0 or mis == None or len(mis) == 0:
+	if sequences is None or len(sequences) == 0 or mis is None or len(mis) == 0:
 		print 'Invalid data sequences or minimum support values'
 		return
 
@@ -135,11 +139,12 @@ def ms_ps(sequences, mis, sdc):
 		# 	print seq
 		# raw_input()
 
-		patterns += r_prefix_span(it, sequences_with_it, mis_cnt, sup_val)
+		patterns += r_prefix_span(it, sequences_with_it, mis_cnt, sup_val, sdc)
 
 		sequences = remove_item(sequences, it)
 
 	return patterns
+
 
 def get_sup_cnt(_sequences, _it=None):
 	flattened = [list(set(chain(*seq))) for seq in _sequences]
@@ -150,6 +155,7 @@ def get_sup_cnt(_sequences, _it=None):
 	else:
 		return sup_cnt
 
+
 def has_item(l, i):
 	if l:
 		while isinstance(l[0], list):
@@ -157,6 +163,7 @@ def has_item(l, i):
 
 		return i in l
 	return False
+
 
 def filter_sdc(_seq, _it, _sup, _sups, _sdc):
 	res = []
@@ -175,7 +182,8 @@ def filter_sdc(_seq, _it, _sup, _sups, _sdc):
 
 	return res
 
-def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_val):
+
+def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_val, sdc):
 
 	patterns = []
 	
@@ -197,9 +205,10 @@ def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_val):
 		patterns.append(([[_it]], get_sup_cnt(_sequences_with_it, _it)))
 
 	for seq in len_1_freq_sequences:
-		patterns += prefix_span(seq, _sequences_with_it, _it, mis_cnt, sup_val)
+		patterns += prefix_span(seq, _sequences_with_it, _it, mis_cnt, sup_val, sdc)
 
 	return patterns
+
 
 def remove_infreq_items(_sequences, mis_cnt):
 	_seqs = [list(set(chain(*seq))) for seq in _sequences]
@@ -208,6 +217,7 @@ def remove_infreq_items(_sequences, mis_cnt):
 	filtered = [[[it for it in item_set if cnt.get(it) >= mis_cnt or it == '_'] for item_set in seq] for seq in _sequences]
 
 	return remove_empty(filtered)
+
 
 def remove_empty(_list):
 	res = []
@@ -224,10 +234,11 @@ def remove_empty(_list):
 
 	return res
 
-def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val):
+
+def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val, sdc):
 	print 'Prefix:', prefix
 
-	projected_sequences = get_projected_sequences(prefix, _sequences, _it)
+	projected_sequences = get_projected_sequences(prefix, _sequences)
 
 	print 'Projected Database:'
 	print '\n'.join(str(seq) for seq in projected_sequences)
@@ -268,7 +279,7 @@ def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val):
 			if sup_cnt >= mis_cnt:
 				patterns.append((prefix + [[it]], sup_cnt))
 
-		tmp_patterns = [(pat, sup_cnt) for pat, sup_cnt in tmp_patterns if is_sequence_sdc_satisfied(list(set(chain(*pat))), sup_val)]
+		tmp_patterns = [(pat, sup_cnt) for pat, sup_cnt in tmp_patterns if is_sequence_sdc_satisfied(list(set(chain(*pat))), sup_val, sdc)]
 
 		for (pat, sup_cnt) in tmp_patterns:
 			if has_item(pat, _it):
@@ -277,7 +288,8 @@ def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val):
 
 	return patterns
 
-def get_projected_sequences(prefix, _sequences, _it):
+
+def get_projected_sequences(prefix, _sequences):
 	projected_sequences = []
 
 	for seq in _sequences:
@@ -298,52 +310,58 @@ def get_projected_sequences(prefix, _sequences, _it):
 			if projected_seq:
 				projected_sequences.append(projected_seq)
 
-		valid_sequences = remove_empty([[[it for it in item_set if it != '-'] for item_set in seq] for seq in projected_sequences])
+		valid_sequences = remove_empty([[[it for it in item_set if it != '_'] for item_set in seq] for seq in projected_sequences])
 
 		if valid_sequences:
 			return remove_empty(projected_sequences)
 		else:
 			return valid_sequences
 
+
 def contains_in_order(sq_item_set, pr_item_set):
-	if(contains(sq_item_set, pr_item_set)):
+	if contains(sq_item_set, pr_item_set):
 		cur_pr_item = 0
 		cur_sq_item = 0
-		
+
 		while cur_pr_item < len(pr_item_set) and cur_sq_item < len(sq_item_set):
 			if pr_item_set[cur_pr_item] == sq_item_set[cur_sq_item]:
 				cur_pr_item += 1
-				if cur_pr_item == len(pr_item_set): return True
-			
+				if cur_pr_item == len(pr_item_set):
+					return True
+
 			cur_sq_item += 1
-	 
+
 	return False
+
 
 def contains(big, small):
 	return len(set(big).intersection(set(small))) == len(small)
 
+
 def project(last_item_in_prefix, suffix):
 	first_set_in_suffix = suffix[0]
-			
+
 	if last_item_in_prefix == first_set_in_suffix[-1]:
 		return suffix[1:]
 	else:
 		suffix[0] = ['_'] + first_set_in_suffix[first_set_in_suffix.index(last_item_in_prefix)+1:]
 		return suffix
 
-def is_sequence_sdc_satisfied(_list, sup_val):
+
+def is_sequence_sdc_satisfied(_list, sup_val, sdc):
 	if _list:
 		if len(_list) > 1:
 			for it1 in _list:
 				sup1 = sup_val.get(it1)
 				for it2 in _list:
-					if it1 != '-' and it2 != '-' and it1 != it2:
+					if it1 != '_' and it2 != '_' and it1 != it2:
 						sup2 = sup_val.get(it2)
 						if abs(sup1 - sup2) > sdc:
 							return False
 		return True
 	else:
 		return False
+
 
 def remove_item(_list, _it):
 	res = []
@@ -361,6 +379,7 @@ def remove_item(_list, _it):
 
 	return res
 
+
 def write_result(patterns, out_file):
 	patterns = sorted(patterns, key=pattern_len)
 	result = ''
@@ -370,6 +389,7 @@ def write_result(patterns, out_file):
 	while True:
 		cur_patterns = [pat for pat in patterns if pattern_len(pat) == cur_len]
 		if not cur_patterns:
+			result += '**end of patterns'
 			break
 
 		result += "The number of length " + str(cur_len) + " sequential patterns is " + str(len(cur_patterns)) + '\n'
@@ -388,6 +408,7 @@ def write_result(patterns, out_file):
 	_file = open(out_file, 'w')
 	_file.write(result)
 	_file.close()
+
 
 def pattern_len(pat):
 
