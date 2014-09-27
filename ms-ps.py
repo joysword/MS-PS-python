@@ -446,7 +446,6 @@ def write_result(patterns, out_file):
 	while True:
 		cur_patterns = [pat for pat in patterns if pattern_len(pat) == cur_len]
 		if not cur_patterns:
-			result += '**end of patterns'
 			break
 
 		result += "The number of length " + str(cur_len) + " sequential patterns is " + str(len(cur_patterns)) + '\n'
@@ -461,6 +460,7 @@ def write_result(patterns, out_file):
 		result += '\n'
 
 	print result
+	print '**end of patterns'
 
 	_file = open(out_file, 'w')
 	_file.write(result)
