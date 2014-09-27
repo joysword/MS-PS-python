@@ -7,6 +7,7 @@ import math
 
 
 def main():
+	"""Main algorithm logic."""
 
 	(data_file, sup_file, out_file) = read_args(sys.argv[1:])
 
@@ -38,9 +39,12 @@ def main():
 	# print 'sdc:', sdc
 	# raw_input()
 
-	patterns = ms_ps(sequences, mis, sdc)
+	global result_patterns
+	result_patterns = []
 
-	write_result(patterns, out_file)
+	ms_ps(sequences, mis, sdc)
+
+	write_result(result_patterns, out_file)
 
 
 def read_args(args):
@@ -84,6 +88,8 @@ def read_args(args):
 
 
 def _exit(message):
+	"""Print error message and exit."""
+
 	if message == 'help':
 		message = 'usage: -d data_file [-s support_file [-o output_file]]\n'
 		message += 'default is data.txt, para.txt and output.txt'
@@ -96,67 +102,67 @@ def _exit(message):
 
 
 def ms_ps(sequences, mis, sdc):
+	"""Main body of MS-PS algorithm."""
+
 	if sequences is None or len(sequences) == 0 or mis is None or len(mis) == 0:
 		print 'Invalid data sequences or minimum support values'
 		return
 
-	patterns = []
+	# get total number of sequences, support count and support value of all items
+	total_sequences = len(sequences)
 
 	sup_cnt = get_sup_cnt(sequences)
-	
-	total_sequences = len(sequences)
-	
 	sup_val = {it: sup_cnt.get(it)/float(total_sequences) for it in sup_cnt.keys()}
 
-	# print 'sup_cnt & sup_val:'
-	# for k in sup_cnt.keys():
-	# 	print k, sup_cnt.get(k), sup_val.get(k)
+	print 'sup_cnt & sup_val:'
+	for k in sup_cnt.keys():
+		print k, sup_cnt.get(k), sup_val.get(k)
 	# raw_input()
 
-	# Step 1 & 2, frequent items sorted based on MIS
+	# Step 1 & 2, list of frequent items sorted based on MIS
 	freq_items = sorted([it for it in sup_val.keys() if sup_val.get(it) >= mis.get(it)], key=mis.get)
 
-	# print 'frequent items:', freq_items
+	print 'frequent items:', freq_items
 	# raw_input()
 
 	for it in freq_items:
 
-		# print 'current frequent item:', it
+		print 'current frequent item:', it
 		# raw_input()
 
+		# minimum item support count of current item
 		mis_cnt = int(math.ceil(mis.get(it) * total_sequences))
 
+		# sequences that contains current item
 		sequences_with_it = [seq for seq in sequences if has_item(seq, it)]
 
-		# print 'sequences that have \'' + it + '\':'
-		# print '\n'.join(str(seq) for seq in sequences_with_it)
+		print 'sequences that have \'' + it + '\':'
+		print '\n'.join(str(seq) for seq in sequences_with_it)
 		# raw_input()
 
+		# remove items not satisfy SDC
 		sequences_with_it = [filter_sdc(seq, it, sup_val.get(it), sup_val, sdc) for seq in sequences_with_it]
 
-		# print 'sequences that have \'' + it + '\' and filtered using SDC:'
-		# for seq in sequences_with_it:
-		# 	print seq
+		print 'sequences that have \'' + it + '\' and filtered using SDC (i.e. S_k):'
+		for seq in sequences_with_it:
+			print seq
 		# raw_input()
 
-		patterns += r_prefix_span(it, sequences_with_it, mis_cnt, sup_val, sdc)
+		r_prefix_span(it, sequences_with_it, mis_cnt, sup_cnt, sup_val, sdc)
 
 		sequences = remove_item(sequences, it)
 
-	return patterns
 
+def get_sup_cnt(_sequences):
+	"""Get support count of an item or of all items."""
 
-def get_sup_cnt(_sequences, _it=None):
 	flattened = [list(set(chain(*seq))) for seq in _sequences]
-	sup_cnt = dict(Counter(it for seq in flattened for it in seq))
-
-	if _it:
-		return sup_cnt.get(_it)
-	else:
-		return sup_cnt
+	return dict(Counter(it for seq in flattened for it in seq))
 
 
 def has_item(l, i):
+	"""Test if an item is contained in a nested list."""
+
 	if l:
 		while isinstance(l[0], list):
 			l = list(chain(*l))
@@ -165,61 +171,84 @@ def has_item(l, i):
 	return False
 
 
-def filter_sdc(_seq, _it, _sup, _sups, _sdc):
+def filter_sdc(_seq, _it, _sup_it, _sup_all, sdc):
+	"""Remove from a sequence all items that not within SDC range."""
+
 	res = []
 
 	if _seq and isinstance(_seq[0], list):
 		for l in _seq:
-			filtered = filter_sdc(l, _it, _sup, _sups, _sdc)
+			filtered = filter_sdc(l, _it, _sup_it, _sup_all, sdc)
 			if filtered:
 				res.append(filtered)
 	else:
+		print 'current sequence that being filtered:'
+		print _seq
+		# raw_input()
+
 		for it in _seq:
-			if it != _it and abs(_sups.get(it) - _sup) > _sdc:
-				continue
+
+			if it != _it and abs(_sup_all.get(it) - _sup_it) > sdc:
+				print '\'' + it + '\' has been deleted'
 			else:
 				res.append(it)
+		# raw_input()
 
 	return res
 
 
-def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_val, sdc):
+def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_cnt, sup_val, sdc):
+	"""
+	Restricted Prefix Scan algorithm.
 
-	patterns = []
-	
-	sequences_with_it = remove_infreq_items(_sequences_with_it, mis_cnt)
-	freq_items = list(set(chain(*(chain(*sequences_with_it)))))
+	:param _it: string. current item on which r_PrefixScan works
+	:param _sequences_with_it: list. sequences that contain current item
+	:param mis_cnt: int. minimum item support count of current item
+	:param sup_cnt: dict. support counts for all items in original database
+	:param sup_val: dict. actual support values for all items in original database
+	:param sdc: float. support difference constraint
+	:return: dict. patterns found
+	"""
+
+	# remove infrequent items at the beginning, instead of during each iteration
+	freq_sequences_with_it = remove_infreq_items(_sequences_with_it, mis_cnt)
+	freq_items = list(set(chain(*(chain(*freq_sequences_with_it)))))
 
 	# print 'frequent items:', freq_items
 	# raw_input()
 
-	len_1_freq_sequences = [[[it]] for it in freq_items]
-
-	_sequences_with_it = remove_infreq_items(_sequences_with_it, mis_cnt)
-
-	# print '_sequences_with_it (now only frequent items):'
-	# print '\n'.join(str(seq) for seq in _sequences_with_it)
+	# print 'freq_sequences_with_it:'
+	# print '\n'.join(str(seq) for seq in freq_sequences_with_it)
 	# raw_input()
 
+	len_1_freq_sequences = [[[it]] for it in freq_items]
+
+	# if current item is one of the length-1 frequent sequences
+	# append current item and its count to result pattern list
 	if has_item(len_1_freq_sequences, _it):
-		patterns.append(([[_it]], get_sup_cnt(_sequences_with_it, _it)))
+		result_patterns.append(([[_it]], sup_cnt.get(_it)))
 
+	# for each length-1 frequent sequence 'seq'
+	# find all patterns that have 'seq' as prefix
+	# just like in (2.8.1)
 	for seq in len_1_freq_sequences:
-		patterns += prefix_span(seq, _sequences_with_it, _it, mis_cnt, sup_val, sdc)
-
-	return patterns
+		prefix_span(seq, freq_sequences_with_it, _it, mis_cnt, sup_val, sdc)
 
 
 def remove_infreq_items(_sequences, mis_cnt):
+	"""Remove infrequent items from sequences based on minimum item support count."""
+
 	_seqs = [list(set(chain(*seq))) for seq in _sequences]
 	cnt = dict(Counter(it for seq in _seqs for it in seq))
 
-	filtered = [[[it for it in item_set if cnt.get(it) >= mis_cnt or it == '_'] for item_set in seq] for seq in _sequences]
+	filtered = [[[it for it in item_set if it == '_' or cnt.get(it) >= mis_cnt] for item_set in seq] for seq in _sequences]
 
 	return remove_empty(filtered)
 
 
 def remove_empty(_list):
+	"""Remove empty items in a nested list."""
+
 	res = []
 
 	if _list and isinstance(_list[0], list):
@@ -236,32 +265,46 @@ def remove_empty(_list):
 
 
 def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val, sdc):
-	print 'Prefix:', prefix
+	"""
+	An iteration of Prefix Span algorithm.
 
+	:param prefix: list. current prefix
+	:param _sequences: list. current database.
+	:param _it: string. current item (note that we only keep patterns containing current item)
+	:param mis_cnt: int. minimum item support count of current item, used for all items in this iteration
+	:param sup_val: dict. actual support values for all items in original database
+	:param sdc: float. support difference constraint
+	:return: dict. patterns found
+	"""
+
+	print 'Prefix:', prefix
+	# raw_input()
+
+	# compute projected database
 	projected_sequences = get_projected_sequences(prefix, _sequences)
 
 	print 'Projected Database:'
 	print '\n'.join(str(seq) for seq in projected_sequences)
+	# raw_input()
 
 	tmp_patterns = []
-	patterns = []
 
 	if projected_sequences:
 
 		last_set_in_prefix = prefix[-1]
-		all_items_same_set = []
-		all_items_diff_set = []
+		all_items_same_set = []  # {prefix, x}
+		all_items_diff_set = []  # {prefix}{x}
 
 		for projected_seq in projected_sequences:
 			items_same_set = []
 			items_diff_set = []
 
 			for cur_item_set in projected_seq:
-				if has_item(cur_item_set, '_'):
-					items_same_set += cur_item_set[1:]
+				if cur_item_set and cur_item_set[0] == '_':  # {_, Y}
+					items_same_set += cur_item_set[1:]  # {Y}
 				else:
-					if contains_in_order(cur_item_set, last_set_in_prefix):
-						items_same_set += cur_item_set[cur_item_set.index(last_set_in_prefix[-1]):]
+					if is_sub_sequence(cur_item_set, last_set_in_prefix):
+						items_same_set += cur_item_set[cur_item_set.index(last_set_in_prefix[-1]) + 1:]
 
 					items_diff_set += cur_item_set
 
@@ -273,78 +316,92 @@ def prefix_span(prefix, _sequences, _it, mis_cnt, sup_val, sdc):
 
 		for it, sup_cnt in dict_same_set.iteritems():
 			if sup_cnt >= mis_cnt:
-				patterns.append((prefix[:-1] + [prefix[-1] + [it]], sup_cnt))
+				tmp_patterns.append((prefix[:-1] + [prefix[-1] + [it]], sup_cnt))
 
 		for it, sup_cnt in dict_diff_set.iteritems():
 			if sup_cnt >= mis_cnt:
-				patterns.append((prefix + [[it]], sup_cnt))
+				tmp_patterns.append((prefix + [[it]], sup_cnt))
 
+		# remove patterns that don't satisfy SDC
 		tmp_patterns = [(pat, sup_cnt) for pat, sup_cnt in tmp_patterns if is_sequence_sdc_satisfied(list(set(chain(*pat))), sup_val, sdc)]
 
 		for (pat, sup_cnt) in tmp_patterns:
 			if has_item(pat, _it):
-				patterns.append((pat, sup_cnt))
-			patterns += prefix_span(pat, _sequences, _it, mis_cnt, sup_val)
-
-	return patterns
+				result_patterns.append((pat, sup_cnt))
+			prefix_span(pat, _sequences, _it, mis_cnt, sup_val, sdc)
 
 
 def get_projected_sequences(prefix, _sequences):
+	"""
+	Compute 'prefix'-projected database.
+
+	:param prefix: list. current prefix
+	:param _sequences: list. current database
+	:return: list. projected database
+	"""
+
+	print 'get_projected_sequences'
+	print prefix
+	print _sequences
 	projected_sequences = []
 
 	for seq in _sequences:
-		cur_pr_item_set = 0
-		cur_sq_item_set = 0
+		cur_pre_item_set = 0
+		cur_seq_item_set = 0
 
-		while cur_pr_item_set < len(prefix) and cur_sq_item_set < len(seq):
-			if contains_in_order(seq[cur_sq_item_set], prefix[cur_pr_item_set]):
-				cur_pr_item_set += 1
-				if cur_pr_item_set == len(prefix):
+		is_valid = False
+
+		while cur_pre_item_set < len(prefix) and cur_seq_item_set < len(seq):
+			if is_sub_sequence(seq[cur_seq_item_set], prefix[cur_pre_item_set]):
+				cur_pre_item_set += 1
+				if cur_pre_item_set == len(prefix):
+					is_valid = True
 					break
 
-			cur_sq_item_set += 1
+			cur_seq_item_set += 1
 
-		if cur_pr_item_set == len(prefix):
-			projected_seq = project(prefix[-1][-1], seq[cur_sq_item_set:])
+		if is_valid:
+			projected_seq = project(prefix[-1][-1], seq[cur_seq_item_set:])
 
 			if projected_seq:
 				projected_sequences.append(projected_seq)
 
-		valid_sequences = remove_empty([[[it for it in item_set if it != '_'] for item_set in seq] for seq in projected_sequences])
+	valid_sequences = remove_empty([[[it for it in item_set if it != '_'] for item_set in seq] for seq in projected_sequences])
 
-		if valid_sequences:
-			return remove_empty(projected_sequences)
-		else:
-			return valid_sequences
+	if valid_sequences:
+		return remove_empty(projected_sequences)
+	else:
+		return valid_sequences
 
 
-def contains_in_order(sq_item_set, pr_item_set):
-	if contains(sq_item_set, pr_item_set):
-		cur_pr_item = 0
-		cur_sq_item = 0
+def is_sub_sequence(seq_item_set, pre_item_set):
+	if contains(seq_item_set, pre_item_set):
+		cur_pre_item = 0
+		cur_seq_item = 0
 
-		while cur_pr_item < len(pr_item_set) and cur_sq_item < len(sq_item_set):
-			if pr_item_set[cur_pr_item] == sq_item_set[cur_sq_item]:
-				cur_pr_item += 1
-				if cur_pr_item == len(pr_item_set):
+		while cur_pre_item < len(pre_item_set) and cur_seq_item < len(seq_item_set):
+			if pre_item_set[cur_pre_item] == seq_item_set[cur_seq_item]:
+				cur_pre_item += 1
+				if cur_pre_item == len(pre_item_set):
 					return True
 
-			cur_sq_item += 1
+			cur_seq_item += 1
 
 	return False
 
 
-def contains(big, small):
-	return len(set(big).intersection(set(small))) == len(small)
+def contains(_long, _short):
+	return len(set(_long).intersection(set(_short))) == len(_short)
 
 
 def project(last_item_in_prefix, suffix):
 	first_set_in_suffix = suffix[0]
 
+	# if suffix is not in the same item set as last item in prefix
 	if last_item_in_prefix == first_set_in_suffix[-1]:
 		return suffix[1:]
 	else:
-		suffix[0] = ['_'] + first_set_in_suffix[first_set_in_suffix.index(last_item_in_prefix)+1:]
+		suffix[0] = ['_'] + first_set_in_suffix[first_set_in_suffix.index(last_item_in_prefix) + 1:]
 		return suffix
 
 
@@ -383,7 +440,7 @@ def remove_item(_list, _it):
 def write_result(patterns, out_file):
 	patterns = sorted(patterns, key=pattern_len)
 	result = ''
-	
+
 	cur_len = 1
 
 	while True:
