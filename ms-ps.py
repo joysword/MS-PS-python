@@ -9,27 +9,30 @@ import math
 def main():
 	"""Main algorithm logic."""
 
+	# (optional) read arguments
 	(data_file, sup_file, out_file) = read_args(sys.argv[1:])
 
+	# read data from input file
 	_file = open(data_file, 'rU')
 	txt = _file.read()
 	_file.close()
 
-	txt = txt.replace('<{', '').replace('}>', '')
-	sequences = txt.split('\n')
-	sequences = [seq.split("}{") for seq in sequences if seq]
-	sequences = [[[it.strip() for it in item_set.split(',')] for item_set in seq] for seq in sequences]
+	txt = txt.replace('<{', '').replace('}>', '') # get rid of '<{' and '}>'
+	sequences = txt.split('\n') # each line is a sequence (1D list)
+	sequences = [seq.split("}{") for seq in sequences if seq] # split sequence to transactions (itemset) (2D list)
+	sequences = [[[it.strip() for it in item_set.split(',')] for item_set in seq] for seq in sequences] # split itemset to items (3D list)
 
 	# print 'sequences:'
 	# print '\n'.join(str(seq) for seq in sequences)
 	# raw_input()
 
+	# read support from input file
 	_file = open(sup_file, 'rU')
 	txt = _file.read()
 	_file.close()
 
-	mis = {match[0]: float(match[1]) for match in re.findall(r'MIS\((\w+)\)\s+=\s+(\d*\.?\d*)', txt)}
-	sdc = float(re.search(r'SDC\s=\s(\d*\.?\d*)', txt).group(1))
+	mis = {match[0]: float(match[1]) for match in re.findall(r'MIS\((\w+)\)\s+=\s+(\d*\.?\d*)', txt)} # save MIS to a dict
+	sdc = float(re.search(r'SDC\s=\s(\d*\.?\d*)', txt).group(1)) # save SDC as a float
 
 	# print 'mis:'
 	# for k in mis.keys():
@@ -42,8 +45,10 @@ def main():
 	global result_patterns
 	result_patterns = []
 
+	# MS-PS algorithm
 	ms_ps(sequences, mis, sdc)
 
+	# output
 	write_result(result_patterns, out_file)
 
 
@@ -110,24 +115,23 @@ def ms_ps(sequences, mis, sdc):
 
 	# get total number of sequences, support count and support value of all items
 	total_sequences = len(sequences)
-
 	sup_cnt = get_sup_cnt(sequences)
 	sup_val = {it: sup_cnt.get(it)/float(total_sequences) for it in sup_cnt.keys()}
 
-	print 'sup_cnt & sup_val:'
-	for k in sup_cnt.keys():
-		print k, sup_cnt.get(k), sup_val.get(k)
+	# print 'sup_cnt & sup_val:'
+	# for k in sup_cnt.keys():
+	# 	print k, sup_cnt.get(k), sup_val.get(k)
 	# raw_input()
 
 	# Step 1 & 2, list of frequent items sorted based on MIS
 	freq_items = sorted([it for it in sup_val.keys() if sup_val.get(it) >= mis.get(it)], key=mis.get)
 
-	print 'frequent items:', freq_items
+	# print 'frequent items:', freq_items
 	# raw_input()
 
 	for it in freq_items:
 
-		print 'current frequent item:', it
+		# print 'current frequent item:', it
 		# raw_input()
 
 		# minimum item support count of current item
@@ -136,33 +140,36 @@ def ms_ps(sequences, mis, sdc):
 		# sequences that contains current item
 		sequences_with_it = [seq for seq in sequences if has_item(seq, it)]
 
-		print 'sequences that have \'' + it + '\':'
-		print '\n'.join(str(seq) for seq in sequences_with_it)
+		# print 'sequences that have \'' + it + '\':'
+		# print '\n'.join(str(seq) for seq in sequences_with_it)
 		# raw_input()
 
 		# remove items not satisfy SDC
 		sequences_with_it = [filter_sdc(seq, it, sup_val.get(it), sup_val, sdc) for seq in sequences_with_it]
 
-		print 'sequences that have \'' + it + '\' and filtered using SDC (i.e. S_k):'
-		for seq in sequences_with_it:
-			print seq
+		# print 'sequences that have \'' + it + '\' and filtered using SDC (i.e. S_k):'
+		# for seq in sequences_with_it:
+		# 	print seq
 		# raw_input()
 
+		# run r-PrefixSpan algorithm for current frequent item
 		r_prefix_span(it, sequences_with_it, mis_cnt, sup_cnt, sup_val, sdc)
 
+		# remove current frequent item from the database
 		sequences = remove_item(sequences, it)
 
 
 def get_sup_cnt(_sequences):
 	"""Get support count of an item or of all items."""
 
-	flattened = [list(set(chain(*seq))) for seq in _sequences]
+	flattened = [list(set(chain(*seq))) for seq in _sequences] # 1D list containing all items in _sequences
 	return dict(Counter(it for seq in flattened for it in seq))
 
 
 def has_item(l, i):
 	"""Test if an item is contained in a nested list."""
 
+	# keep flattening the list until it is 1D and check if the item is in it
 	if l:
 		while isinstance(l[0], list):
 			l = list(chain(*l))
@@ -230,7 +237,7 @@ def r_prefix_span(_it, _sequences_with_it, mis_cnt, sup_cnt, sup_val, sdc):
 
 	# for each length-1 frequent sequence 'seq'
 	# find all patterns that have 'seq' as prefix
-	# just like in (2.8.1)
+	# just like in chapter 2.8.1
 	for seq in len_1_freq_sequences:
 		prefix_span(seq, freq_sequences_with_it, _it, mis_cnt, sup_val, sdc)
 
@@ -340,9 +347,9 @@ def get_projected_sequences(prefix, _sequences):
 	:return: list. projected database
 	"""
 
-	print 'get_projected_sequences'
-	print prefix
-	print _sequences
+	# print 'get_projected_sequences'
+	# print prefix
+	# print _sequences
 	projected_sequences = []
 
 	for seq in _sequences:
